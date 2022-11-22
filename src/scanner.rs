@@ -69,19 +69,19 @@ impl Scanner {
             ';' => self.add_token(Semicolon),
             '*' => self.add_token(Star),
             '!' => {
-                let t = if self.match_next('=') {BangEqual} else {Bang};
+                let t = if self.match_next('=') { BangEqual } else { Bang };
                 self.add_token(t);
             },
             '=' => {
-                let t = if self.match_next('=') {EqualEqual} else {Equal};
+                let t = if self.match_next('=') { EqualEqual } else { Equal };
                 self.add_token(t);
             },
             '<' => {
-                let t = if self.match_next('=') {LessEqual} else {Less};
+                let t = if self.match_next('=') { LessEqual } else { Less };
                 self.add_token(t);
             },
             '>' => {
-                let t = if self.match_next('=') {GreaterEqual} else {Greater};
+                let t = if self.match_next('=') { GreaterEqual } else { Greater };
                 self.add_token(t);
             },
             '/' => {
@@ -90,6 +90,14 @@ impl Scanner {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
+                } else if self.match_next('*') {
+                    while self.peek() != '*' && self.peek_next() != '/' && !self.is_at_end() {
+                        if self.peek() == '\n' { self.line += 1; }
+                        self.advance();
+                    }
+                    // consume * then /
+                    if !self.is_at_end() { self.advance(); }
+                    if !self.is_at_end() { self.advance(); }
                 } else {
                     self.add_token(Slash);
                 }
@@ -150,7 +158,6 @@ impl Scanner {
             crate::error(self.line, "Unterminated string", &mut self.had_error);
         } else {
             self.advance();  // closing "
-            
             let s: Literal = Literal::String_(self.source[self.start+1..self.current-1].to_owned());
             self.add_full_token(String_, Some(s));
         }

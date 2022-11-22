@@ -43,7 +43,7 @@ impl Token {
                line: usize) -> Self {
         Self {
             type_,
-            lexeme: lexeme.to_owned(), 
+            lexeme: lexeme.to_owned(),
             literal,
             line,
         }
@@ -52,7 +52,7 @@ impl Token {
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} {} {:?}", self.type_, self.lexeme, self.literal)
+        write!(f, "{:?} {} {:?} L{}", self.type_, self.lexeme, self.literal, self.line)
     }
 }
 
