@@ -1,8 +1,11 @@
 mod scanner;
 mod token;
+mod expr;
+mod ast_printer;
 
 use crate::scanner::Scanner;
 use crate::token::Token;
+// use crate::expr::Expr;  // test
 
 use std::env;
 use std::io::{self, Write};
@@ -10,6 +13,32 @@ use std::process;
 use std::fs;
 
 fn main() {
+    // let expr: Expr = Expr::Binary {
+    //     left: Box::new(Expr::Unary {
+    //         operator: Token {
+    //             type_: token::TokenType::Minus,
+    //             lexeme: "-".to_owned(),
+    //             literal: None,
+    //             line: 1,    
+    //         },
+    //         right: Box::new(Expr::Literal {
+    //             value: Some(token::Literal::Number(123.0)),
+    //         }),
+    //     }),
+    //     operator: Token {
+    //         type_: token::TokenType::Star,
+    //         lexeme: "*".to_owned(),
+    //         literal: None,
+    //         line: 1,
+    //     },
+    //     right: Box::new(Expr::Grouping {
+    //         expression: Box::new(Expr::Literal {
+    //             value: Some(token::Literal::Number(45.67)),
+    //         })
+    //     })
+    // };
+    // let printer = ast_printer::AstPrinter;
+    // println!("{}", printer.print(&expr));
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
         eprintln!("Usage: cargo run [-- script]");

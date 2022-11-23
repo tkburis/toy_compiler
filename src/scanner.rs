@@ -51,7 +51,7 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens.push(Token::new(EOF, "", None, self.line));
+        self.tokens.push(Token::new(Eof, "", None, self.line));
         self.tokens.clone()
     }
 

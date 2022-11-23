@@ -19,7 +19,7 @@ pub enum TokenType {
     And, Class, Else, False, Fun, For, If, Nil, Or,
     Print, Return, Super, This, True, Var, While,
 
-    EOF
+    Eof,
 }
 
 #[derive(Debug, Clone)]
@@ -28,12 +28,22 @@ pub enum Literal {
     String_(String),
 }
 
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s: String = match self {
+            Literal::Number(x) => x.to_string(),
+            Literal::String_(x) => x.to_owned(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
 #[derive(Clone)]
 pub struct Token {
-    type_: TokenType,
-    lexeme: String,
-    literal: Option<Literal>,
-    line: usize,
+    pub type_: TokenType,
+    pub lexeme: String,
+    pub literal: Option<Literal>,
+    pub line: usize,
 }
 
 impl Token {
