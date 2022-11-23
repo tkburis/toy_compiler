@@ -31,7 +31,7 @@ pub struct Scanner {
     start: usize,
     current: usize,
     line: usize,
-    pub had_error: bool,
+    had_error: bool,
 }
 
 impl Scanner {
@@ -46,13 +46,16 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> (Vec<Token>, Result<(), ()>) {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
         self.tokens.push(Token::new(Eof, "", None, self.line));
-        self.tokens.clone()
+        match self.had_error {
+            true => (self.tokens.clone(), Err(())),
+            false => (self.tokens.clone(), Ok(())),
+        }
     }
 
     fn scan_token(&mut self) {

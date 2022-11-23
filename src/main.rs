@@ -4,7 +4,7 @@ mod expr;
 mod ast_printer;
 
 use crate::scanner::Scanner;
-use crate::token::Token;
+// use crate::token::Token;
 // use crate::expr::Expr;  // test
 
 use std::env;
@@ -19,7 +19,7 @@ fn main() {
     //             type_: token::TokenType::Minus,
     //             lexeme: "-".to_owned(),
     //             literal: None,
-    //             line: 1,    
+    //             line: 1,
     //         },
     //         right: Box::new(Expr::Literal {
     //             value: Some(token::Literal::Number(123.0)),
@@ -69,15 +69,12 @@ fn run_prompt() {
 
 fn run(source: &str) -> Result<(), ()> {
     let mut scanner = Scanner::new(source.to_owned());
-    let tokens: Vec<Token> = scanner.scan_tokens();
+    let (tokens, res) = scanner.scan_tokens();
 
     for token in tokens {
         println!("{}", token);
     }
-    match scanner.had_error {
-        true => Err(()),
-        false => Ok(()),
-    }
+    res
 }
 
 fn error(line: usize, message: &str, had_error: &mut bool) {
