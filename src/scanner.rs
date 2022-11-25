@@ -46,15 +46,15 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> (Vec<Token>, Result<(), ()>) {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, ()> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
         self.tokens.push(Token::new(Eof, "", None, self.line));
         match self.had_error {
-            true => (self.tokens.clone(), Err(())),
-            false => (self.tokens.clone(), Ok(())),
+            true => Err(()),
+            false => Ok(self.tokens.to_owned()),
         }
     }
 
@@ -120,17 +120,23 @@ impl Scanner {
             '0'..='9' => self.number(),
             'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
 
-            _ => crate::error(self.line, "Unexpected character", &mut self.had_error)
+            _ => self.error("Unexpected character"),
         };
+    }
+
+    fn error(&mut self, message: &str) {
+        crate::error_line(self.line, message);
+        self.had_error = true;
     }
 
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
+    // TODO: refactor to make more Rust-ic by returning Option<char> instead
     // Return the current character and increment current pointer.
     fn advance(&mut self) -> char {
-        if !self.is_at_end() { self.current += 1 };
+        if !self.is_at_end() { self.current += 1; }
         self.source.chars().nth(self.current - 1).unwrap()
     }
 
@@ -146,6 +152,7 @@ impl Scanner {
         true
     }
 
+    // TODO: refactor to make more Rust-ic by returning Option<char> instead
     // Return next character (the one pointed at by `current`).
     fn peek(&self) -> char {
         if self.is_at_end() {
@@ -155,6 +162,7 @@ impl Scanner {
         }
     }
 
+    // TODO: refactor to make more Rust-ic by returning Option<char> instead
     // Return character after next.
     fn peek_next(&self) -> char {
         if self.current + 1 >= self.source.len() {
@@ -175,7 +183,7 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            crate::error(self.line, "Unterminated string", &mut self.had_error);
+            self.error("Unterminated string");
         } else {
             self.advance();  // closing `"`
             let s: Literal = Literal::String_(self.source[self.start+1..self.current-1].to_owned());
