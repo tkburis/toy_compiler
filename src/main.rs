@@ -63,7 +63,7 @@ fn run_prompt() {
         io::stdin()
             .read_line(&mut line)
             .expect("Failed to read line");
-        _ = run(&line);
+        run(&line);
     }
 }
 

@@ -61,6 +61,7 @@ impl Scanner {
     fn scan_token(&mut self) {
         let c: char = self.advance();
         match c {
+            // 1-character tokens
             '(' => self.add_token(LeftParen),
             ')' => self.add_token(RightParen),
             '{' => self.add_token(LeftBrace),
@@ -71,6 +72,8 @@ impl Scanner {
             '+' => self.add_token(Plus),
             ';' => self.add_token(Semicolon),
             '*' => self.add_token(Star),
+
+            // 2-character tokens
             '!' => {
                 let t = if self.match_next('=') { BangEqual } else { Bang };
                 self.add_token(t);
@@ -102,17 +105,21 @@ impl Scanner {
                     }
 
                     // consume `*` then `/`
-                    if !self.is_at_end() { self.advance(); }
-                    if !self.is_at_end() { self.advance(); }
+                    self.advance();
                 } else {
                     self.add_token(Slash);
                 }
             }
+
+            // ignore
             ' ' | '\r' | '\t' => (),
             '\n' => self.line += 1,
+
+            // literals and identifier
             '"' => self.string(),
             '0'..='9' => self.number(),
             'a'..='z' | 'A'..='Z' | '_' => self.identifier(),
+
             _ => crate::error(self.line, "Unexpected character", &mut self.had_error)
         };
     }
@@ -123,7 +130,7 @@ impl Scanner {
 
     // Return the current character and increment current pointer.
     fn advance(&mut self) -> char {
-        self.current += 1;
+        if !self.is_at_end() { self.current += 1 };
         self.source.chars().nth(self.current - 1).unwrap()
     }
 
