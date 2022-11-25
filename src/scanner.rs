@@ -28,8 +28,8 @@ lazy_static! {
 pub struct Scanner {
     source: String,
     tokens: Vec<Token>,
-    start: usize,
-    current: usize,
+    start: usize,  // point to the start of the current token
+    current: usize,  // point to the *next* character to be scanned
     line: usize,
     had_error: bool,
 }
@@ -89,16 +89,19 @@ impl Scanner {
             },
             '/' => {
                 if self.match_next('/') {
+                    // `//` style comments
                     // keep consuming until EOL
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                 } else if self.match_next('*') {
+                    // `/* ... */` style comments
                     while self.peek() != '*' && self.peek_next() != '/' && !self.is_at_end() {
                         if self.peek() == '\n' { self.line += 1; }
                         self.advance();
                     }
-                    // consume * then /
+
+                    // consume `*` then `/`
                     if !self.is_at_end() { self.advance(); }
                     if !self.is_at_end() { self.advance(); }
                 } else {
@@ -118,11 +121,13 @@ impl Scanner {
         self.current >= self.source.len()
     }
 
+    // Return the current character and increment current pointer.
     fn advance(&mut self) -> char {
         self.current += 1;
         self.source.chars().nth(self.current - 1).unwrap()
     }
 
+    // Return whether or not next character is `expected`. If so, consume it.
     fn match_next(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
@@ -134,6 +139,7 @@ impl Scanner {
         true
     }
 
+    // Return next character (the one pointed at by `current`).
     fn peek(&self) -> char {
         if self.is_at_end() {
             '\0'
@@ -142,6 +148,7 @@ impl Scanner {
         }
     }
 
+    // Return character after next.
     fn peek_next(&self) -> char {
         if self.current + 1 >= self.source.len() {
             '\0'
@@ -150,30 +157,39 @@ impl Scanner {
         }
     }
 
+    // Process string.
     fn string(&mut self) {
+        // Keep consuming until `"`.
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
             }
             self.advance();
         }
+
         if self.is_at_end() {
             crate::error(self.line, "Unterminated string", &mut self.had_error);
         } else {
-            self.advance();  // closing "
+            self.advance();  // closing `"`
             let s: Literal = Literal::String_(self.source[self.start+1..self.current-1].to_owned());
             self.add_full_token(String_, Some(s));
         }
     }
 
+    // Process number.
     fn number(&mut self) {
+        // Keep consuming digits.
         while self.peek().is_ascii_digit() {
             self.advance();
         }
+
+        // Consume decimal point only if the character after is a digit.
+        // `123.` will give Number(123), Dot.
         if self.peek() == '.' && self.peek_next().is_ascii_digit() {
-            // consume .
-            self.advance();
+            self.advance();  // consume `.`
         }
+
+        // Consume the fractional part.
         while self.peek().is_ascii_digit() {
             self.advance();
         }
@@ -181,21 +197,29 @@ impl Scanner {
         self.add_full_token(Number, Some(s))
     }
 
+    // Process identifier.
     fn identifier(&mut self) {
+        // Allow alphanumeric and `_` in identifier.
         while self.peek().is_ascii_alphanumeric() || self.peek() == '_' {
             self.advance();
         }
+
         let s = &self.source[self.start..self.current];
+
+        // Check if `s` is a keyword. If so, add that; otherwise, add `TokenType::Identifier`.
         let type_ = KEYWORDS.get(s).unwrap_or(&Identifier).to_owned();
         self.add_token(type_);
     }
 
+    // Add a non-literal token.
     fn add_token(&mut self, type_: TokenType) {
         self.add_full_token(type_, None);
     }
 
+    // Add a token with a literal.
     fn add_full_token(&mut self, type_: TokenType, literal: Option<Literal>) {
-        let token = Token::new(type_, &self.source[self.start..self.current], literal, self.line);
+        let lexeme = &self.source[self.start..self.current];
+        let token = Token::new(type_, lexeme, literal, self.line);
         self.tokens.push(token);
     }
 }

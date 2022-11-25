@@ -74,6 +74,7 @@ fn run(source: &str) -> Result<(), ()> {
     for token in tokens {
         println!("{}", token);
     }
+
     res
 }
 
