@@ -1,28 +1,29 @@
-// TODO: clean up namespace
-use crate::token::{Token, TokenType::{*, self}, Literal};
+use crate::token::{Token, TokenType, Literal};
 use crate::error::Error;
+
 use std::collections::HashMap;
+
 use lazy_static::lazy_static;
 
 lazy_static! {
     static ref KEYWORDS: HashMap<String, TokenType> = {
         let mut m = HashMap::new();
-        m.insert("and".to_owned(), And);
-        m.insert("class".to_owned(), Class);
-        m.insert("else".to_owned(), Else);
-        m.insert("false".to_owned(), False);
-        m.insert("for".to_owned(), For);
-        m.insert("fun".to_owned(), Fun);
-        m.insert("if".to_owned(), If);
-        m.insert("nil".to_owned(), Nil);
-        m.insert("or".to_owned(), Or);
-        m.insert("print".to_owned(), Print);
-        m.insert("return".to_owned(), Return);
-        m.insert("super".to_owned(), Super);
-        m.insert("this".to_owned(), This);
-        m.insert("true".to_owned(), True);
-        m.insert("var".to_owned(), Var);
-        m.insert("while".to_owned(), While);
+        m.insert("and".to_owned(), TokenType::And);
+        m.insert("class".to_owned(), TokenType::Class);
+        m.insert("else".to_owned(), TokenType::Else);
+        m.insert("false".to_owned(), TokenType::False);
+        m.insert("for".to_owned(), TokenType::For);
+        m.insert("fun".to_owned(), TokenType::Fun);
+        m.insert("if".to_owned(), TokenType::If);
+        m.insert("nil".to_owned(), TokenType::Nil);
+        m.insert("or".to_owned(), TokenType::Or);
+        m.insert("print".to_owned(), TokenType::Print);
+        m.insert("return".to_owned(), TokenType::Return);
+        m.insert("super".to_owned(), TokenType::Super);
+        m.insert("this".to_owned(), TokenType::This);
+        m.insert("true".to_owned(), TokenType::True);
+        m.insert("var".to_owned(), TokenType::Var);
+        m.insert("while".to_owned(), TokenType::While);
         m
     };
 }
@@ -53,7 +54,7 @@ impl Scanner {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens.push(Token::new(Eof, "", Literal::Nil, self.line));
+        self.tokens.push(Token::new(TokenType::Eof, "", Literal::Nil, self.line));
         match self.had_error {
             true => Err(Error::ScanError),
             false => Ok(self.tokens.to_owned()),
@@ -64,32 +65,32 @@ impl Scanner {
         let c: char = self.advance();
         match c {
             // 1-character tokens
-            '(' => self.add_token(LeftParen),
-            ')' => self.add_token(RightParen),
-            '{' => self.add_token(LeftBrace),
-            '}' => self.add_token(RightBrace),
-            ',' => self.add_token(Comma),
-            '.' => self.add_token(Dot),
-            '-' => self.add_token(Minus),
-            '+' => self.add_token(Plus),
-            ';' => self.add_token(Semicolon),
-            '*' => self.add_token(Star),
+            '(' => self.add_token(TokenType::LeftParen),
+            ')' => self.add_token(TokenType::RightParen),
+            '{' => self.add_token(TokenType::LeftBrace),
+            '}' => self.add_token(TokenType::RightBrace),
+            ',' => self.add_token(TokenType::Comma),
+            '.' => self.add_token(TokenType::Dot),
+            '-' => self.add_token(TokenType::Minus),
+            '+' => self.add_token(TokenType::Plus),
+            ';' => self.add_token(TokenType::Semicolon),
+            '*' => self.add_token(TokenType::Star),
 
             // 2-character tokens
             '!' => {
-                let t = if self.match_next('=') { BangEqual } else { Bang };
+                let t = if self.match_next('=') { TokenType::BangEqual } else { TokenType::Bang };
                 self.add_token(t);
             },
             '=' => {
-                let t = if self.match_next('=') { EqualEqual } else { Equal };
+                let t = if self.match_next('=') { TokenType::EqualEqual } else { TokenType::Equal };
                 self.add_token(t);
             },
             '<' => {
-                let t = if self.match_next('=') { LessEqual } else { Less };
+                let t = if self.match_next('=') { TokenType::LessEqual } else { TokenType::Less };
                 self.add_token(t);
             },
             '>' => {
-                let t = if self.match_next('=') { GreaterEqual } else { Greater };
+                let t = if self.match_next('=') { TokenType::GreaterEqual } else { TokenType::Greater };
                 self.add_token(t);
             },
             '/' => {
@@ -109,7 +110,7 @@ impl Scanner {
                     // consume `*` then `/`
                     self.advance();
                 } else {
-                    self.add_token(Slash);
+                    self.add_token(TokenType::Slash);
                 }
             }
 
@@ -189,7 +190,7 @@ impl Scanner {
         } else {
             self.advance();  // closing `"`
             let s: Literal = Literal::String_(self.source[self.start+1..self.current-1].to_owned());
-            self.add_full_token(String_, s);
+            self.add_full_token(TokenType::String_, s);
         }
     }
 
@@ -211,7 +212,7 @@ impl Scanner {
             self.advance();
         }
         let s: Literal = Literal::Number(self.source[self.start..self.current].parse().unwrap());
-        self.add_full_token(Number, s)
+        self.add_full_token(TokenType::Number, s)
     }
 
     // Process identifier.
@@ -224,7 +225,7 @@ impl Scanner {
         let s = &self.source[self.start..self.current];
 
         // Check if `s` is a keyword. If so, add that; otherwise, add `TokenType::Identifier`.
-        let type_ = KEYWORDS.get(s).unwrap_or(&Identifier).to_owned();
+        let type_ = KEYWORDS.get(s).unwrap_or(&TokenType::Identifier).to_owned();
         self.add_token(type_);
     }
 
