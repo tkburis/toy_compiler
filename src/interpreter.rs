@@ -124,9 +124,9 @@ impl Interpreter {
     }
 
     fn is_truthy(&self, value: &Value) -> bool {
-        match value {
-            &Value::Nil => false,
-            &Value::Bool(x) => x,
+        match *value {
+            Value::Nil => false,
+            Value::Bool(x) => x,
             _ => true,
         }
     }

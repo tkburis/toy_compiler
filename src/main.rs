@@ -66,7 +66,7 @@ fn run(source: &str) -> Result<(), Error> {
     let interpreter = interpreter::Interpreter;
     let value: token::Value = interpreter.interpret(&expression)?;
 
-    println!("{}", value.to_string());
+    println!("{}", value);
 
     Ok(())
 }
