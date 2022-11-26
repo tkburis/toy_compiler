@@ -1,7 +1,6 @@
 use crate::token::{Token, TokenType, Literal};
 use crate::expr::Expr;
-
-struct ParseError;
+use crate::error::Error;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -16,22 +15,19 @@ impl Parser {
         }
     }
 
-    // Return an empty error `Err(())` if error happened, otherwise Ok(Expr).
-    pub fn parse(&mut self) -> Result<Expr, ()> {
-        match self.expression() {
-            Ok(expr) => Ok(expr),
-            Err(_) => Err(()),
-        }
+    // Interface.
+    pub fn parse(&mut self) -> Result<Expr, Error> {
+        self.expression()
     }
 
     // By allowing rules to only match with other rules `below` it, precedence can be controlled.
     // expression -> equality
-    fn expression(&mut self) -> Result<Expr, ParseError> {
+    fn expression(&mut self) -> Result<Expr, Error> {
         self.equality()
     }
 
     // equality -> comparison ( ( "!=" | "==" ) comparison )*
-    fn equality(&mut self) -> Result<Expr, ParseError> {
+    fn equality(&mut self) -> Result<Expr, Error> {
         let mut expr = self.comparison()?;
 
         while self.match_next(&[TokenType::BangEqual, TokenType::EqualEqual]) {
@@ -48,7 +44,7 @@ impl Parser {
     }
 
     // comparison -> term ( ( ">" | ">=" | "<" | "<=" ) term )*
-    fn comparison(&mut self) -> Result<Expr, ParseError> {
+    fn comparison(&mut self) -> Result<Expr, Error> {
         let mut expr = self.term()?;
 
         while self.match_next(&[TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual]) {
@@ -65,7 +61,7 @@ impl Parser {
     }
 
     // term -> factor ( ( "-" | "+" ) factor )*
-    fn term(&mut self) -> Result<Expr, ParseError> {
+    fn term(&mut self) -> Result<Expr, Error> {
         let mut expr = self.factor()?;
 
         while self.match_next(&[TokenType::Minus, TokenType::Plus]) {
@@ -82,7 +78,7 @@ impl Parser {
     }
 
     // factor -> unary ( ( "/" | "*" ) unary )*
-    fn factor(&mut self) -> Result<Expr, ParseError> {
+    fn factor(&mut self) -> Result<Expr, Error> {
         let mut expr = self.unary()?;
 
         while self.match_next(&[TokenType::Slash, TokenType::Star]) {
@@ -99,7 +95,7 @@ impl Parser {
     }
 
     // unary -> ( ( "!" | "-" ) unary ) | primary
-    fn unary(&mut self) -> Result<Expr, ParseError> {
+    fn unary(&mut self) -> Result<Expr, Error> {
         if self.match_next(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous().to_owned();
             let right = self.unary()?;
@@ -113,15 +109,15 @@ impl Parser {
     }
 
     // primary -> literal | "(" expression ")"
-    fn primary(&mut self) -> Result<Expr, ParseError> {
+    fn primary(&mut self) -> Result<Expr, Error> {
         if self.match_next(&[TokenType::False]) {
-            Ok(Expr::Literal { value: Some(Literal::False) })
+            Ok(Expr::Literal { value: Literal::Bool(false) })
 
         } else if self.match_next(&[TokenType::True]) {
-            Ok(Expr::Literal { value: Some(Literal::True) })
+            Ok(Expr::Literal { value: Literal::Bool(true) })
 
         } else if self.match_next(&[TokenType::Nil]) {
-            Ok(Expr::Literal { value: Some(Literal::Nil) })
+            Ok(Expr::Literal { value: Literal::Nil })
 
         } else if self.match_next(&[TokenType::Number, TokenType::String_]) {
             Ok(Expr::Literal { value: self.previous().to_owned().literal })
@@ -132,8 +128,7 @@ impl Parser {
             Ok(Expr::Grouping { expression: Box::new(expr) })
 
         } else {
-            // Convert Result<(), ParseError> -> Err(ParseError).
-            Err(self.error(self.peek(), "Expected expression.").unwrap_err())
+            Err(self.error(self.peek(), "Expected expression."))
         }
     }
 
@@ -149,12 +144,11 @@ impl Parser {
     }
 
     // Check if next token is `token_type`; otherwise, throw an error.
-    fn match_err(&mut self, token_type: &TokenType, message: &str) -> Result<Token, ParseError> {
+    fn match_err(&mut self, token_type: &TokenType, message: &str) -> Result<Token, Error> {
         if self.check(token_type) {
             Ok(self.advance().to_owned())
         } else {
-            // Convert Result<(), ParseError> -> Err(ParseError).
-            Err(self.error(self.peek(), message).unwrap_err())
+            Err(self.error(self.peek(), message))
         }
     }
 
@@ -187,10 +181,10 @@ impl Parser {
     }
 
     // Report error to main function.
-    // Also, return ParseError object to be bubbled up.
-    fn error(&self, token: &Token, message: &str) -> Result<(), ParseError> {
+    // Also, return Error::ParseError variant to be bubbled up.
+    fn error(&self, token: &Token, message: &str) -> Error {
         crate::error_token(token, message);
-        Err(ParseError)
+        Error::ParseError
     }
 
     fn synchronize(&mut self) {

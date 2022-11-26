@@ -1,4 +1,6 @@
+// TODO: clean up namespace
 use crate::token::{Token, TokenType::{*, self}, Literal};
+use crate::error::Error;
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 
@@ -46,14 +48,14 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, ()> {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Error> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
         }
-        self.tokens.push(Token::new(Eof, "", None, self.line));
+        self.tokens.push(Token::new(Eof, "", Literal::Nil, self.line));
         match self.had_error {
-            true => Err(()),
+            true => Err(Error::ScanError),
             false => Ok(self.tokens.to_owned()),
         }
     }
@@ -187,7 +189,7 @@ impl Scanner {
         } else {
             self.advance();  // closing `"`
             let s: Literal = Literal::String_(self.source[self.start+1..self.current-1].to_owned());
-            self.add_full_token(String_, Some(s));
+            self.add_full_token(String_, s);
         }
     }
 
@@ -209,7 +211,7 @@ impl Scanner {
             self.advance();
         }
         let s: Literal = Literal::Number(self.source[self.start..self.current].parse().unwrap());
-        self.add_full_token(Number, Some(s))
+        self.add_full_token(Number, s)
     }
 
     // Process identifier.
@@ -228,11 +230,11 @@ impl Scanner {
 
     // Add a non-literal token.
     fn add_token(&mut self, type_: TokenType) {
-        self.add_full_token(type_, None);
+        self.add_full_token(type_, Literal::Nil);
     }
 
     // Add a token with a literal.
-    fn add_full_token(&mut self, type_: TokenType, literal: Option<Literal>) {
+    fn add_full_token(&mut self, type_: TokenType, literal: Literal) {
         let lexeme = &self.source[self.start..self.current];
         let token = Token::new(type_, lexeme, literal, self.line);
         self.tokens.push(token);

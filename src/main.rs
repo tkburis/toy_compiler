@@ -3,9 +3,12 @@ mod token;
 mod expr;
 mod ast_printer;
 mod parser;
+mod interpreter;
+mod error;
 
 use crate::scanner::Scanner;
 use crate::parser::Parser;
+use crate::error::Error;
 
 use std::env;
 use std::io::{self, Write};
@@ -26,7 +29,11 @@ fn main() {
 
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("Failed to read file");
-    if run(&source).is_err() { process::exit(65) };
+    match run(&source) {
+        Err(Error::ScanError) | Err(Error::ParseError) => process::exit(65),
+        Err(Error::RuntimeError) => process::exit(70),
+        Ok(()) => (),
+    };
 }
 
 fn run_prompt() {
@@ -41,7 +48,7 @@ fn run_prompt() {
     }
 }
 
-fn run(source: &str) -> Result<(), ()> {
+fn run(source: &str) -> Result<(), Error> {
     let mut scanner = Scanner::new(source.to_owned());
     let tokens: Vec<token::Token> = scanner.scan_tokens()?;
 
@@ -53,8 +60,13 @@ fn run(source: &str) -> Result<(), ()> {
     let mut parser = Parser::new(tokens);
     let expression: expr::Expr = parser.parse()?;
 
-    let printer = ast_printer::AstPrinter;
-    println!("{}", printer.print(&expression));
+    // let printer = ast_printer::AstPrinter;
+    // println!("{}", printer.print(&expression));
+
+    let interpreter = interpreter::Interpreter;
+    let value: token::Value = interpreter.interpret(&expression)?;
+
+    println!("{}", value.to_string());
 
     Ok(())
 }
@@ -70,6 +82,12 @@ fn error_token(token: &token::Token, message: &str) {
         report(token.line, &format!(" at '{}'", token.lexeme)[..], message);
     }
 }
+
+// fn error_runtime(error: Error) {
+//     if let Error::RuntimeError {message, token} = error {
+//         eprintln!("{}\n[line {}]", message, token.line);
+//     }
+// }
 
 fn report(line: usize, loc: &str, message: &str) {
     eprintln!("[line {line}] Error{loc}: {message}");

@@ -1,4 +1,5 @@
 use std::fmt;
+use std::convert::From;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
@@ -22,12 +23,12 @@ pub enum TokenType {
     Eof,
 }
 
+// Literal represents `front-end` values that have been manually entered by user.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     Number(f64),
     String_(String),
-    True,
-    False,
+    Bool(bool),
     Nil,
 }
 
@@ -36,26 +37,58 @@ impl fmt::Display for Literal {
         let s: String = match self {
             Literal::Number(x) => x.to_string(),
             Literal::String_(x) => x.to_owned(),
-            Literal::True => "True".to_owned(),
-            Literal::False => "False".to_owned(),
-            Literal::Nil => "Nil".to_owned(),
+            Literal::Bool(x) => x.to_string(),
+            Literal::Nil => "nil".to_owned(),
         };
         write!(f, "{}", s)
     }
 }
 
-#[derive(Clone, PartialEq)]
+// Value represents evaluated expressions within the interpreter.
+#[derive(PartialEq)]
+pub enum Value {
+    Number(f64),
+    String_(String),
+    Bool(bool),
+    Nil,
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s: String = match self {
+            Value::Number(x) => x.to_string(),
+            Value::String_(x) => x.to_owned(),
+            Value::Bool(x) => x.to_string(),
+            Value::Nil => "nil".to_owned(),
+        };
+        write!(f, "{}", s)
+    }
+}
+
+impl From<Literal> for Value {
+    fn from(literal: Literal) -> Self {
+        match literal {
+            Literal::Number(x) => Self::Number(x),
+            Literal::String_(x) => Self::String_(x),
+            Literal::Bool(x) => Self::Bool(x),
+            Literal::Nil => Self::Nil,
+        }
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub type_: TokenType,
     pub lexeme: String,
-    pub literal: Option<Literal>,
+    pub literal: Literal,
     pub line: usize,
 }
 
 impl Token {
     pub fn new(type_: TokenType,
                lexeme: &str,
-               literal: Option<Literal>,
+               literal: Literal,
                line: usize) -> Self {
         Self {
             type_,

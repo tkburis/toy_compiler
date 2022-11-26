@@ -10,7 +10,7 @@ pub enum Expr {
         expression: Box<Expr>,
     },
     Literal {
-        value: Option<token::Literal>,
+        value: token::Literal,
     },
     Unary {
         operator: token::Token,
@@ -18,8 +18,8 @@ pub enum Expr {
     },
 }
 
-pub trait ExprVisitor<T> {
-    fn accept(&self, expr: &Expr) -> T {
+pub trait ExprVisitor<T, E> {
+    fn accept(&self, expr: &Expr) -> Result<T, E> {
         match expr {
             Expr::Binary { left, operator, right } => {
                 self.visit_binary_expr(left, operator, right)
@@ -35,9 +35,10 @@ pub trait ExprVisitor<T> {
             }
         }
     }
-    fn visit_binary_expr(&self, left: &Expr, operator: &token::Token, right: &Expr) -> T;
-    fn visit_grouping_expr(&self, expression: &Expr) -> T;
-    fn visit_literal_expr(&self, value: &Option<token::Literal>) -> T;
-    fn visit_unary_expr(&self, operator: &token::Token, right: &Expr) -> T;
+
+    fn visit_binary_expr(&self, left: &Expr, operator: &token::Token, right: &Expr) -> Result<T, E>;
+    fn visit_grouping_expr(&self, expression: &Expr) -> Result<T, E>;
+    fn visit_literal_expr(&self, value: &token::Literal) -> Result<T, E>;
+    fn visit_unary_expr(&self, operator: &token::Token, right: &Expr) -> Result<T, E>;
 }
 
