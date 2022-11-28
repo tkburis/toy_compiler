@@ -1,11 +1,15 @@
+// TODO: refactor if match_next() -> match statements
+// peek_type()??
 use crate::token::{Token, TokenType, Literal};
 use crate::expr::Expr;
+use crate::stmt::Stmt;
 use crate::error::Error;
 
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,  // point to the *next* token to be parsed
 }
+
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
@@ -16,8 +20,63 @@ impl Parser {
     }
 
     // Interface.
-    pub fn parse(&mut self) -> Result<Expr, Error> {
-        self.expression()
+    // program -> declaration* EOF
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements = Vec::new();
+        while !self.is_at_end() {
+            if let Some(x) = self.declaration_wrapper() {
+                statements.push(x);
+            }
+        }
+        Ok(statements)
+    }
+
+    fn declaration_wrapper(&mut self) -> Option<Stmt> {
+        let res = self.declaration();
+        if res.is_err() {
+            self.synchronize();
+        }
+        res.ok()
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, Error> {
+        if self.match_next(&[TokenType::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, Error> {
+        let name = self.match_err(&TokenType::Identifier, "Expected variable name.")?;
+
+        let initializer = match self.match_next(&[TokenType::Equal]) {
+            true => Some(self.expression()?),
+            false => None,
+        };
+
+        self.match_err(&TokenType::Semicolon, "Expected ';' after variable declaration.")?;
+        Ok(Stmt::Var { name, initializer })
+    }
+
+    fn statement(&mut self) -> Result<Stmt, Error> {
+        if self.match_next(&[TokenType::Print]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, Error> {
+        let value = self.expression()?;
+        self.match_err(&TokenType::Semicolon, "Expected `;` after value.")?;
+        Ok(Stmt::Print { expression: value })
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, Error> {
+        let expr = self.expression()?;
+        self.match_err(&TokenType::Semicolon, "Expected `;` after expression.")?;
+        Ok(Stmt::Expression { expression: expr })
     }
 
     // By allowing rules to only match with other rules `below` it, precedence can be controlled.
@@ -127,6 +186,8 @@ impl Parser {
             _ = self.match_err(&TokenType::RightParen, "Expect `)` after expression.")?;
             Ok(Expr::Grouping { expression: Box::new(expr) })
 
+        } else if self.match_next(&[TokenType::Identifier]) {
+            Ok(Expr::Variable { name: self.previous().to_owned() })
         } else {
             Err(self.error(self.peek(), "Expected expression."))
         }
@@ -180,8 +241,8 @@ impl Parser {
             .expect("Could not get previous token: at beginning of file")
     }
 
-    // Report error to main function.
-    // Also, return Error::ParseError variant to be bubbled up.
+    // Report error to main function to be printed.
+    // Also, return `Error::ParseError` variant to be bubbled up.
     fn error(&self, token: &Token, message: &str) -> Error {
         crate::error_token(token, message);
         Error::ParseError
@@ -203,7 +264,7 @@ impl Parser {
                 TokenType::If |
                 TokenType::While |
                 TokenType::Print |
-                TokenType::Return => { return; },
+                TokenType::Return => { println!("Synced at {}", self.current); return; },
 
                 _ => (),
             }

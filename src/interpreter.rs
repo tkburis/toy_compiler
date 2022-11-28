@@ -1,16 +1,25 @@
 use crate::expr::{self, ExprVisitor};
+use crate::stmt::{self, StmtVisitor};
 use crate::token::{self, TokenType, Value};
+use crate::environment::Environment;
 use crate::error::Error;
 
-pub struct Interpreter;
+pub struct Interpreter<'a> {
+    pub environment: &'a mut Environment,
+}
 
-impl ExprVisitor<Value, Error> for Interpreter {
+// Expression evaluation.
+// Note the return enum is `Value`, which is similar to a `Literal`, but specifically represents
+// the values of evaluated expressions.
+impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
     fn visit_literal_expr(&self, value: &token::Literal) -> Result<Value, Error> {
         Ok(Value::from(value.to_owned()))
     }
+
     fn visit_grouping_expr(&self, expression: &expr::Expr) -> Result<Value, Error> {
         self.evaluate(expression)
     }
+
     fn visit_unary_expr(&self, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
         let right_eval: Value = self.evaluate(right)?;
 
@@ -26,9 +35,12 @@ impl ExprVisitor<Value, Error> for Interpreter {
                 }
             },
 
+            // Note no other operator type is reachable, since the parser builds unary expressions
+            // if and only if the operator is either `Bang` or `Minus`.
             _ => unreachable!(),
         }
     }
+
     fn visit_binary_expr(&self, left: &expr::Expr, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
         let left_eval: Value = self.evaluate(left)?;
         let right_eval: Value = self.evaluate(right)?;
@@ -91,17 +103,14 @@ impl ExprVisitor<Value, Error> for Interpreter {
                 if let (&Value::Number(x), &Value::Number(y)) = (&left_eval, &right_eval) {
                     Ok(Value::Number(x + y))
                 } else {
+                    // If the values aren't *both* numbers, return the concatenated string
+                    // representations of the values.
                     let (x, y) = (left_eval, right_eval);
-                    Ok(Value::String_(format!("{}{}", x, y)))  // TODO: better way to do this?
+                    Ok(Value::String_(format!("{}{}", x, y)))
                 }
-                // } else {
-                //     Err(self.error(operator, "Operands must be two numbers or two strings."))
-                    // Err(
-                    //     Error::RuntimeError { message: "Operands must be two numbers or two strings.".to_owned(),
-                        // token: operator.to_owned() }
-                       // )
-                // }
             },
+
+            // My implementation of != and == simply piggybacks Rust's `PartialEq` trait.
             TokenType::BangEqual => {
                 Ok(Value::Bool(left_eval != right_eval))
             },
@@ -109,18 +118,58 @@ impl ExprVisitor<Value, Error> for Interpreter {
                 Ok(Value::Bool(left_eval == right_eval))
             },
 
+            // Note no other operator type is reachable, since the parser builds binary expressions
+            // if and only if the operator is one of the above.
             _ => unreachable!(),
         }
     }
+
+    fn visit_variable_expr(&self, name: &token::Token) -> Result<Value, Error> {
+        self.environment.get(name)
+    }
 }
 
-impl Interpreter {
-    pub fn interpret(&self, expression: &expr::Expr) -> Result<Value, Error> {
-        self.evaluate(expression)
+// Statement execution.
+impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
+    fn visit_expression_stmt(&self, expression: &expr::Expr) -> Result<(), Error> {
+        self.evaluate(expression)?;
+        Ok(())
     }
 
+    fn visit_print_stmt(&self, expression: &expr::Expr) -> Result<(), Error> {
+        let value = self.evaluate(expression)?;
+        println!("{}", value.to_string());
+        Ok(())
+    }
+
+    fn visit_var_stmt(&mut self, name: &token::Token, initializer: &Option<expr::Expr>) -> Result<(), Error> {
+        if let Some(x) = initializer {
+            let value = self.evaluate(x)?;
+            self.environment.define(name.lexeme.to_owned(), &value);
+        } else {
+            self.environment.define(name.lexeme.to_owned(), &Value::Nil);
+        }
+        Ok(())
+    }
+}
+
+impl<'a> Interpreter<'a> {
+    // Interface. If something went wrong, return a `RuntimeError` object.
+    pub fn interpret(&mut self, statements: &Vec<stmt::Stmt>) -> Result<(), Error> {
+        for statement in statements {
+            self.execute(statement)?;
+        }
+        Ok(())
+    }
+
+    // Runs `accept` for statements.
+    fn execute(&mut self, statement: &stmt::Stmt) -> Result<(), Error> {
+        self.accept_stmt(statement)
+    }
+
+    // Runs `accept` for expressions.
     fn evaluate(&self, expr: &expr::Expr) -> Result<Value, Error> {
-        self.accept(expr)
+        self.accept_expr(expr)
     }
 
     fn is_truthy(&self, value: &Value) -> bool {
@@ -132,16 +181,10 @@ impl Interpreter {
     }
 
     fn operand_not_number_error(&self, token: &token::Token) -> Error {
-        // TODO: why not just report the error directly via crate::error_token?
-        // crate::error_token(token, "Operand(s) must be a number.");
-        // Error::RuntimeError
-        // Error::RuntimeError {
-        //     message: "Operand(s) must be a number.".to_owned(),
-        //     token: token.to_owned(),
-        // }
         self.error(token, "Operand(s) must be a number.")
     }
 
+    // Return a `RuntimeError` object to be bubbled up, and call `crate::error_token` to print error.
     fn error(&self, token: &token::Token, message: &str) -> Error {
         crate::error_token(token, message);
         Error::RuntimeError

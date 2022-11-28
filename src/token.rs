@@ -44,8 +44,8 @@ impl fmt::Display for Literal {
     }
 }
 
-// Value represents evaluated expressions within the interpreter.
-#[derive(PartialEq)]
+// Value represents values of evaluated expressions within the interpreter.
+#[derive(PartialEq, Clone)]
 pub enum Value {
     Number(f64),
     String_(String),

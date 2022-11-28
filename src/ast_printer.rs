@@ -15,11 +15,14 @@ impl ExprVisitor<String, ()> for AstPrinter {
     fn visit_unary_expr(&self, operator: &token::Token, right: &Expr) -> Result<String, ()> {
         Ok(self.parenthesize(operator.lexeme.to_owned(), &[right]))
     }
+    fn visit_variable_expr(&self, name: &token::Token) -> Result<String, ()> {
+        Ok(name.to_string())
+    }
 }
 
 impl AstPrinter {
     pub fn print(&self, expr: &Expr) -> String {
-        self.accept(expr).unwrap()
+        self.accept_expr(expr).unwrap()
     }
     fn parenthesize(&self, name: String, exprs: &[&Expr]) -> String {
         let mut s: String = String::new();
@@ -27,7 +30,7 @@ impl AstPrinter {
         s.push_str(&name);
         for expr in exprs {
             s.push(' ');
-            s.push_str(&self.accept(expr).unwrap());
+            s.push_str(&self.accept_expr(expr).unwrap());
         }
         s.push(')');
         s
