@@ -1,6 +1,10 @@
 use crate::token;
 
 pub enum Expr {
+    Assign {
+        name: token::Token,
+        value: Box<Expr>,
+    },
     Binary {
         left: Box<Expr>,
         operator: token::Token,
@@ -14,7 +18,7 @@ pub enum Expr {
     },
     Unary {
         operator: token::Token,
-        right: Box<Expr>
+        right: Box<Expr>,
     },
     Variable {
         name: token::Token,
@@ -22,8 +26,11 @@ pub enum Expr {
 }
 
 pub trait ExprVisitor<T, E> {
-    fn accept_expr(&self, expr: &Expr) -> Result<T, E> {
+    fn accept_expr(&mut self, expr: &Expr) -> Result<T, E> {
         match expr {
+            Expr::Assign { name, value } => {
+                self.visit_assign_expr(name, value)
+            },
             Expr::Binary { left, operator, right } => {
                 self.visit_binary_expr(left, operator, right)
             },
@@ -42,10 +49,11 @@ pub trait ExprVisitor<T, E> {
         }
     }
 
-    fn visit_binary_expr(&self, left: &Expr, operator: &token::Token, right: &Expr) -> Result<T, E>;
-    fn visit_grouping_expr(&self, expression: &Expr) -> Result<T, E>;
-    fn visit_literal_expr(&self, value: &token::Literal) -> Result<T, E>;
-    fn visit_unary_expr(&self, operator: &token::Token, right: &Expr) -> Result<T, E>;
-    fn visit_variable_expr(&self, name: &token::Token) -> Result<T, E>;
+    fn visit_assign_expr(&mut self, name: &token::Token, value: &Expr) -> Result<T, E>;
+    fn visit_binary_expr(&mut self, left: &Expr, operator: &token::Token, right: &Expr) -> Result<T, E>;
+    fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<T, E>;
+    fn visit_literal_expr(&mut self, value: &token::Literal) -> Result<T, E>;
+    fn visit_unary_expr(&mut self, operator: &token::Token, right: &Expr) -> Result<T, E>;
+    fn visit_variable_expr(&mut self, name: &token::Token) -> Result<T, E>;
 }
 

@@ -1,11 +1,11 @@
-// use crate::token::Token;
+use crate::token::Token;
 
 pub enum Error {
     ScanError,
     ParseError,
-    RuntimeError,
-    // RuntimeError {
-    //     message: String,
-    //     token: Token,
-    // },
+    // RuntimeError,
+    RuntimeError {
+        token: Token,
+        message: String,
+    },
 }

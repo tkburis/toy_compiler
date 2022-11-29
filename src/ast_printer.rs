@@ -18,12 +18,16 @@ impl ExprVisitor<String, ()> for AstPrinter {
     fn visit_variable_expr(&self, name: &token::Token) -> Result<String, ()> {
         Ok(name.to_string())
     }
+    fn visit_assign_expr(&self, name: &token::Token, value: &Expr) -> Result<String, ()> {
+        Ok(self.parenthesize(name.lexeme.clone(), &[value]))
+    }
 }
 
 impl AstPrinter {
     pub fn print(&self, expr: &Expr) -> String {
         self.accept_expr(expr).unwrap()
     }
+
     fn parenthesize(&self, name: String, exprs: &[&Expr]) -> String {
         let mut s: String = String::new();
         s.push('(');

@@ -2,7 +2,7 @@ mod scanner;
 mod token;
 mod expr;
 mod stmt;
-mod ast_printer;
+// mod ast_printer;
 mod parser;
 mod interpreter;
 mod environment;
@@ -35,7 +35,7 @@ fn run_file(file_path: &str) {
     let mut environment = Environment::new();
     match run(&source, &mut environment) {
         Err(Error::ScanError) | Err(Error::ParseError) => process::exit(65),
-        Err(Error::RuntimeError) => process::exit(70),
+        Err(Error::RuntimeError { token: _, message: _ }) => process::exit(70),
         Ok(()) => (),
     };
 }
@@ -69,7 +69,7 @@ fn run(source: &str, environment: &mut Environment) -> Result<(), Error> {
     // let printer = ast_printer::AstPrinter;
     // println!("{}", printer.print(&expression));
 
-    let mut interpreter = interpreter::Interpreter { environment };
+    let mut interpreter = interpreter::Interpreter::new(environment);
     // let value: token::Value = interpreter.interpret(&expression)?;
     _ = interpreter.interpret(&statements)?;
 

@@ -39,6 +39,8 @@ impl Parser {
         res.ok()
     }
 
+    // Statements.
+
     fn declaration(&mut self) -> Result<Stmt, Error> {
         if self.match_next(&[TokenType::Var]) {
             self.var_declaration()
@@ -79,10 +81,31 @@ impl Parser {
         Ok(Stmt::Expression { expression: expr })
     }
 
+    // Expressions.
+
     // By allowing rules to only match with other rules `below` it, precedence can be controlled.
-    // expression -> equality
+    // expression -> assignment
     fn expression(&mut self) -> Result<Expr, Error> {
-        self.equality()
+        self.assignment()
+    }
+
+    // assignment -> (identifier "=" assignment) | equality
+    fn assignment(&mut self) -> Result<Expr, Error> {
+        let expr = self.equality()?;
+
+        if self.match_next(&[TokenType::Equal]) {
+            let equals = self.previous().to_owned();
+            let value = self.assignment()?;
+
+            if let Expr::Variable { name } = expr {
+                return Ok(Expr::Assign { name, value: Box::new(value) });
+            } else {
+                // Note we don't bubble up error because we don't need to go into panic mode and
+                // synchronize.
+                self.error(&equals, "Invalid assignment target.");
+            }
+        }
+        Ok(expr)
     }
 
     // equality -> comparison ( ( "!=" | "==" ) comparison )*
@@ -183,7 +206,7 @@ impl Parser {
 
         } else if self.match_next(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
-            _ = self.match_err(&TokenType::RightParen, "Expect `)` after expression.")?;
+            _ = self.match_err(&TokenType::RightParen, "Expected `)` after expression.")?;
             Ok(Expr::Grouping { expression: Box::new(expr) })
 
         } else if self.match_next(&[TokenType::Identifier]) {

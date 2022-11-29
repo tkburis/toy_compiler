@@ -12,15 +12,15 @@ pub struct Interpreter<'a> {
 // Note the return enum is `Value`, which is similar to a `Literal`, but specifically represents
 // the values of evaluated expressions.
 impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
-    fn visit_literal_expr(&self, value: &token::Literal) -> Result<Value, Error> {
+    fn visit_literal_expr(&mut self, value: &token::Literal) -> Result<Value, Error> {
         Ok(Value::from(value.to_owned()))
     }
 
-    fn visit_grouping_expr(&self, expression: &expr::Expr) -> Result<Value, Error> {
+    fn visit_grouping_expr(&mut self, expression: &expr::Expr) -> Result<Value, Error> {
         self.evaluate(expression)
     }
 
-    fn visit_unary_expr(&self, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
+    fn visit_unary_expr(&mut self, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
         let right_eval: Value = self.evaluate(right)?;
 
         match operator.type_ {
@@ -41,7 +41,7 @@ impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
         }
     }
 
-    fn visit_binary_expr(&self, left: &expr::Expr, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
+    fn visit_binary_expr(&mut self, left: &expr::Expr, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
         let left_eval: Value = self.evaluate(left)?;
         let right_eval: Value = self.evaluate(right)?;
 
@@ -124,19 +124,25 @@ impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
         }
     }
 
-    fn visit_variable_expr(&self, name: &token::Token) -> Result<Value, Error> {
-        self.environment.get(name)
+    fn visit_variable_expr(&mut self, name: &token::Token) -> Result<Value, Error> {
+        self.environment.get(name)?.ok_or_else(|| self.error(name, "Variable not initialized."))
+    }
+
+    fn visit_assign_expr(&mut self, name: &token::Token, value: &expr::Expr) -> Result<Value, Error> {
+        let value_eval = self.evaluate(value)?;
+        self.environment.assign(name, &value_eval)?;
+        Ok(value_eval)
     }
 }
 
 // Statement execution.
 impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
-    fn visit_expression_stmt(&self, expression: &expr::Expr) -> Result<(), Error> {
+    fn visit_expression_stmt(&mut self, expression: &expr::Expr) -> Result<(), Error> {
         self.evaluate(expression)?;
         Ok(())
     }
 
-    fn visit_print_stmt(&self, expression: &expr::Expr) -> Result<(), Error> {
+    fn visit_print_stmt(&mut self, expression: &expr::Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
         println!("{}", value.to_string());
         Ok(())
@@ -145,19 +151,27 @@ impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
     fn visit_var_stmt(&mut self, name: &token::Token, initializer: &Option<expr::Expr>) -> Result<(), Error> {
         if let Some(x) = initializer {
             let value = self.evaluate(x)?;
-            self.environment.define(name.lexeme.to_owned(), &value);
+            self.environment.define(name.lexeme.to_owned(), Some(&value));
         } else {
-            self.environment.define(name.lexeme.to_owned(), &Value::Nil);
+            self.environment.define(name.lexeme.to_owned(), None);
         }
         Ok(())
     }
 }
 
 impl<'a> Interpreter<'a> {
+    pub fn new(environment: &'a mut Environment) -> Self {
+        Self {
+            environment,
+        }
+    }
     // Interface. If something went wrong, return a `RuntimeError` object.
     pub fn interpret(&mut self, statements: &Vec<stmt::Stmt>) -> Result<(), Error> {
         for statement in statements {
-            self.execute(statement)?;
+            if let Err(Error::RuntimeError { token, message }) = self.execute(statement) {
+                crate::error_token(&token, &message);
+                return Err(Error::RuntimeError { token, message });
+            }
         }
         Ok(())
     }
@@ -168,7 +182,7 @@ impl<'a> Interpreter<'a> {
     }
 
     // Runs `accept` for expressions.
-    fn evaluate(&self, expr: &expr::Expr) -> Result<Value, Error> {
+    fn evaluate(&mut self, expr: &expr::Expr) -> Result<Value, Error> {
         self.accept_expr(expr)
     }
 
@@ -184,10 +198,11 @@ impl<'a> Interpreter<'a> {
         self.error(token, "Operand(s) must be a number.")
     }
 
-    // Return a `RuntimeError` object to be bubbled up, and call `crate::error_token` to print error.
+    // Return a `RuntimeError` object to be bubbled up.
+    // Reporting to `crate::error_token` once it has been bubbled up to `interpret()`.
     fn error(&self, token: &token::Token, message: &str) -> Error {
-        crate::error_token(token, message);
-        Error::RuntimeError
+        // crate::error_token(token, message);
+        Error::RuntimeError { token: token.to_owned(), message: message.to_owned() }
     }
 }
 

@@ -28,8 +28,8 @@ pub trait StmtVisitor<T, E> {
             },
         }
     }
-    fn visit_expression_stmt(&self, expression: &Expr) -> Result<T, E>;
-    fn visit_print_stmt(&self, expression: &Expr) -> Result<T, E>;
+    fn visit_expression_stmt(&mut self, expression: &Expr) -> Result<T, E>;
+    fn visit_print_stmt(&mut self, expression: &Expr) -> Result<T, E>;
     fn visit_var_stmt(&mut self, name: &Token, initializer: &Option<Expr>) -> Result<T, E>;
 }
 
