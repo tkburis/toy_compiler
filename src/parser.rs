@@ -1,5 +1,3 @@
-// TODO: refactor if match_next() -> match statements
-// peek_type()??
 use crate::token::{Token, TokenType, Literal};
 use crate::expr::Expr;
 use crate::stmt::Stmt;
@@ -31,6 +29,9 @@ impl Parser {
         Ok(statements)
     }
 
+    // Convert `Result<Stmt, Error>` to `Option<Stmt>`, and call `synchronize()` if something went
+    // wrong. This is to allow `parse()` to collect as many statements as possible into the AST by
+    // omitting invalid statements (`None` variant).
     fn declaration_wrapper(&mut self) -> Option<Stmt> {
         let res = self.declaration();
         if res.is_err() {
@@ -41,6 +42,7 @@ impl Parser {
 
     // Statements.
 
+    // declaration -> var_declaration | statement
     fn declaration(&mut self) -> Result<Stmt, Error> {
         if self.match_next(&[TokenType::Var]) {
             self.var_declaration()
@@ -49,6 +51,7 @@ impl Parser {
         }
     }
 
+    // var_declaration -> "var" identifier ( "=" expression )? ";"
     fn var_declaration(&mut self) -> Result<Stmt, Error> {
         let name = self.match_err(&TokenType::Identifier, "Expected variable name.")?;
 
@@ -61,20 +64,40 @@ impl Parser {
         Ok(Stmt::Var { name, initializer })
     }
 
+    // statement -> print_statement | block | expression_statement
     fn statement(&mut self) -> Result<Stmt, Error> {
         if self.match_next(&[TokenType::Print]) {
             self.print_statement()
+
+        } else if self.match_next(&[TokenType::LeftBrace]) {
+            Ok(Stmt::Block { statements: self.block()? })
+
         } else {
             self.expression_statement()
         }
     }
 
+    // print_statement -> "print" expression ";"
     fn print_statement(&mut self) -> Result<Stmt, Error> {
         let value = self.expression()?;
         self.match_err(&TokenType::Semicolon, "Expected `;` after value.")?;
         Ok(Stmt::Print { expression: value })
     }
 
+    // block -> "{" declaration* "}"
+    fn block(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements = Vec::new();
+
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            statements.push(self.declaration()?);
+        }
+
+        self.match_err(&TokenType::RightBrace, "Expected `}` after block.")?;
+        Ok(statements)
+    }
+
+    // expression_statement -> expression ";"
+    // These are for expressions with side effects such as function calls.
     fn expression_statement(&mut self) -> Result<Stmt, Error> {
         let expr = self.expression()?;
         self.match_err(&TokenType::Semicolon, "Expected `;` after expression.")?;
@@ -91,20 +114,25 @@ impl Parser {
 
     // assignment -> (identifier "=" assignment) | equality
     fn assignment(&mut self) -> Result<Expr, Error> {
+        // We let `self.equality()` collect the identifier.
         let expr = self.equality()?;
 
         if self.match_next(&[TokenType::Equal]) {
             let equals = self.previous().to_owned();
             let value = self.assignment()?;
 
+            // Test if what is collected can be used as a variable.
+            // Doing it this way allows identifiers like `Point(x+2, 0.0).y` since it itself is an
+            // expression.
             if let Expr::Variable { name } = expr {
                 return Ok(Expr::Assign { name, value: Box::new(value) });
             } else {
                 // Note we don't bubble up error because we don't need to go into panic mode and
-                // synchronize.
+                // synchronize. We accept their mistake by reporting the error and move on.
                 self.error(&equals, "Invalid assignment target.");
             }
         }
+
         Ok(expr)
     }
 
@@ -206,11 +234,12 @@ impl Parser {
 
         } else if self.match_next(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
-            _ = self.match_err(&TokenType::RightParen, "Expected `)` after expression.")?;
+            self.match_err(&TokenType::RightParen, "Expected `)` after expression.")?;
             Ok(Expr::Grouping { expression: Box::new(expr) })
 
         } else if self.match_next(&[TokenType::Identifier]) {
             Ok(Expr::Variable { name: self.previous().to_owned() })
+
         } else {
             Err(self.error(self.peek(), "Expected expression."))
         }
@@ -227,7 +256,7 @@ impl Parser {
         false
     }
 
-    // Check if next token is `token_type`; otherwise, throw an error.
+    // Check if next token is `token_type`; otherwise, return an error.
     fn match_err(&mut self, token_type: &TokenType, message: &str) -> Result<Token, Error> {
         if self.check(token_type) {
             Ok(self.advance().to_owned())
@@ -287,7 +316,7 @@ impl Parser {
                 TokenType::If |
                 TokenType::While |
                 TokenType::Print |
-                TokenType::Return => { println!("Synced at {}", self.current); return; },
+                TokenType::Return => { return; },
 
                 _ => (),
             }

@@ -1,6 +1,8 @@
 use crate::token;
 
 pub enum Expr {
+    // Assignment is an expression, and I don't understand why. Consider changing this for future
+    // projects.
     Assign {
         name: token::Token,
         value: Box<Expr>,

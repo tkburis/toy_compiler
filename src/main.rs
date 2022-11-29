@@ -32,7 +32,7 @@ fn main() {
 
 fn run_file(file_path: &str) {
     let source = fs::read_to_string(file_path).expect("Failed to read file");
-    let mut environment = Environment::new();
+    let mut environment = Environment::new(None);  // outermost scope.
     match run(&source, &mut environment) {
         Err(Error::ScanError) | Err(Error::ParseError) => process::exit(65),
         Err(Error::RuntimeError { token: _, message: _ }) => process::exit(70),
@@ -41,7 +41,7 @@ fn run_file(file_path: &str) {
 }
 
 fn run_prompt() {
-    let mut environment = Environment::new();
+    let mut environment = Environment::new(None);  // outermost scope.
     loop {
         print!("> ");
         io::stdout().flush().expect("Flush failed");  // to flush out "> "
@@ -71,7 +71,7 @@ fn run(source: &str, environment: &mut Environment) -> Result<(), Error> {
 
     let mut interpreter = interpreter::Interpreter::new(environment);
     // let value: token::Value = interpreter.interpret(&expression)?;
-    _ = interpreter.interpret(&statements)?;
+    interpreter.interpret(&statements)?;
 
     // println!("{}", value);
 

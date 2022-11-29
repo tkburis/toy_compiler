@@ -109,6 +109,7 @@ impl Scanner {
 
                     // consume `*` then `/`
                     self.advance();
+                    self.advance();
                 } else {
                     self.add_token(TokenType::Slash);
                 }

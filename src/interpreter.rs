@@ -4,6 +4,8 @@ use crate::token::{self, TokenType, Value};
 use crate::environment::Environment;
 use crate::error::Error;
 
+use std::mem;
+
 pub struct Interpreter<'a> {
     pub environment: &'a mut Environment,
 }
@@ -124,8 +126,10 @@ impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
         }
     }
 
+    // We do not allow uninitialized variables.
     fn visit_variable_expr(&mut self, name: &token::Token) -> Result<Value, Error> {
-        self.environment.get(name)?.ok_or_else(|| self.error(name, "Variable not initialized."))
+        self.environment.get(name)?
+            .ok_or_else(|| self.error(name, "Variable not initialized."))
     }
 
     fn visit_assign_expr(&mut self, name: &token::Token, value: &expr::Expr) -> Result<Value, Error> {
@@ -137,6 +141,14 @@ impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
 
 // Statement execution.
 impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
+    // To enclose the new environment in the current environment, we clone the current environment
+    // and put it in the new one. This isn't ideal, but avoids dealing with lifetimes which I don't
+    // want to do.
+    fn visit_block_stmt(&mut self, statements: &[stmt::Stmt]) -> Result<(), Error> {
+        let mut new_env = Environment::new(Some(self.environment.clone()));
+        self.execute_block(statements, &mut new_env)
+    }
+
     fn visit_expression_stmt(&mut self, expression: &expr::Expr) -> Result<(), Error> {
         self.evaluate(expression)?;
         Ok(())
@@ -144,11 +156,11 @@ impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
 
     fn visit_print_stmt(&mut self, expression: &expr::Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
-        println!("{}", value.to_string());
+        println!("{}", value);
         Ok(())
     }
 
-    fn visit_var_stmt(&mut self, name: &token::Token, initializer: &Option<expr::Expr>) -> Result<(), Error> {
+    fn visit_var_stmt(&mut self, name: &token::Token, initializer: Option<&expr::Expr>) -> Result<(), Error> {
         if let Some(x) = initializer {
             let value = self.evaluate(x)?;
             self.environment.define(name.lexeme.to_owned(), Some(&value));
@@ -165,10 +177,13 @@ impl<'a> Interpreter<'a> {
             environment,
         }
     }
+
     // Interface. If something went wrong, return a `RuntimeError` object.
     pub fn interpret(&mut self, statements: &Vec<stmt::Stmt>) -> Result<(), Error> {
         for statement in statements {
             if let Err(Error::RuntimeError { token, message }) = self.execute(statement) {
+                // If something went wrong in statement execution, call `crate::error_token` here.
+                // Also, return `Err` in case the calling function wants to deal with it.
                 crate::error_token(&token, &message);
                 return Err(Error::RuntimeError { token, message });
             }
@@ -179,6 +194,18 @@ impl<'a> Interpreter<'a> {
     // Runs `accept` for statements.
     fn execute(&mut self, statement: &stmt::Stmt) -> Result<(), Error> {
         self.accept_stmt(statement)
+    }
+
+    // Executes scoped code.
+    fn execute_block(&mut self, statements: &[stmt::Stmt], new_env: &mut Environment) -> Result<(), Error> {
+        // Swap the current environment and the new one.
+        mem::swap(self.environment, new_env);
+        for statement in statements {
+            self.execute(statement)?;
+        }
+        // Swap back.
+        mem::swap(self.environment, new_env);
+        Ok(())
     }
 
     // Runs `accept` for expressions.
@@ -198,10 +225,12 @@ impl<'a> Interpreter<'a> {
         self.error(token, "Operand(s) must be a number.")
     }
 
-    // Return a `RuntimeError` object to be bubbled up.
-    // Reporting to `crate::error_token` once it has been bubbled up to `interpret()`.
+    // Helper function to return a `RuntimeError` object to be bubbled up.
+    // Reporting to `crate::error_token` is done once the error has been bubbled up to
+    // `interpret()`. Doing it this way will make it easier for `environment` methods to err, since
+    // they do not have to call `crate::error_token` themselves. Instead, `crate::error_token` is
+    // called in one place (see `interpret()`).
     fn error(&self, token: &token::Token, message: &str) -> Error {
-        // crate::error_token(token, message);
         Error::RuntimeError { token: token.to_owned(), message: message.to_owned() }
     }
 }
