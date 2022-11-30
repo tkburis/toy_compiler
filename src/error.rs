@@ -9,3 +9,4 @@ pub enum Error {
         message: String,
     },
 }
+

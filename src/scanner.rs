@@ -102,7 +102,7 @@ impl Scanner {
                     }
                 } else if self.match_next('*') {
                     // `/* ... */` style comments
-                    while self.peek() != '*' && self.peek_next() != '/' && !self.is_at_end() {
+                    while !(self.peek() == '*' && self.peek_next() == '/') && !self.is_at_end() {
                         if self.peek() == '\n' { self.line += 1; }
                         self.advance();
                     }
