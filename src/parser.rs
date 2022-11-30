@@ -64,10 +64,20 @@ impl Parser {
         Ok(Stmt::Var { name, initializer })
     }
 
-    // statement -> print_statement | block | expression_statement
+    // statement -> if_statement
+    //              | print_statement
+    //              | while_statement
+    //              | block
+    //              | expression_statement
     fn statement(&mut self) -> Result<Stmt, Error> {
-        if self.match_next(&[TokenType::Print]) {
+        if self.match_next(&[TokenType::If]) {
+            self.if_statement()
+
+        } else if self.match_next(&[TokenType::Print]) {
             self.print_statement()
+        
+        } else if self.match_next(&[TokenType::While]) {
+            self.while_statement()
 
         } else if self.match_next(&[TokenType::LeftBrace]) {
             Ok(Stmt::Block { statements: self.block()? })
@@ -77,11 +87,44 @@ impl Parser {
         }
     }
 
+    fn if_statement(&mut self) -> Result<Stmt, Error> {
+        self.match_err(&TokenType::LeftParen, "Expected `(` after `if`.")?;
+        let condition = self.expression()?;
+        self.match_err(&TokenType::RightParen, "Expected ')' after condition.")?;
+
+        let then_branch = self.statement()?;
+
+        // Note `else_branch` is greedily added, so it will be attached to the nearest `if`
+        // statement.
+        // if (first) if (second) something(); else something_else();
+        // Here, `else` is attached to the `if` with the statement `second`.
+        let else_branch = match self.match_next(&[TokenType::Else]) {
+            true => Some(self.statement()?),
+            false => None,
+        };
+
+        Ok(Stmt::If { condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch.map(Box::new)
+        })
+    }
+
     // print_statement -> "print" expression ";"
     fn print_statement(&mut self) -> Result<Stmt, Error> {
         let value = self.expression()?;
         self.match_err(&TokenType::Semicolon, "Expected `;` after value.")?;
         Ok(Stmt::Print { expression: value })
+    }
+
+    // while_statement -> "while" "(" expression ")" statement
+    fn while_statement(&mut self) -> Result<Stmt, Error> {
+        self.match_err(&TokenType::LeftParen, "Expected `(` after `while`.")?;
+        let condition = self.expression()?;
+        self.match_err(&TokenType::RightParen, "Expected ')' after condition.")?;
+
+        let body = self.statement()?;
+
+        Ok(Stmt::While { condition, body: Box::new(body) })
     }
 
     // block -> "{" declaration* "}"
@@ -112,10 +155,10 @@ impl Parser {
         self.assignment()
     }
 
-    // assignment -> (identifier "=" assignment) | equality
+    // assignment -> (identifier "=" assignment) | logic_or
     fn assignment(&mut self) -> Result<Expr, Error> {
         // We let `self.equality()` collect the identifier.
-        let expr = self.equality()?;
+        let expr = self.logic_or()?;
 
         if self.match_next(&[TokenType::Equal]) {
             let equals = self.previous().to_owned();
@@ -131,6 +174,40 @@ impl Parser {
                 // synchronize. We accept their mistake by reporting the error and move on.
                 self.error(&equals, "Invalid assignment target.");
             }
+        }
+
+        Ok(expr)
+    }
+
+    // logic_or -> logic_and ("or" logic_and)*
+    fn logic_or(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.logic_and()?;
+
+        while self.match_next(&[TokenType::Or]) {
+            let operator = self.previous().to_owned();
+            let right = self.logic_and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right)
+            };
+        }
+
+        Ok(expr)
+    }
+
+    // logic_and -> equality ("and" equality)*
+    fn logic_and(&mut self) -> Result<Expr, Error> {
+        let mut expr = self.equality()?;
+
+        while self.match_next(&[TokenType::And]) {
+            let operator = self.previous().to_owned();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right)
+            };
         }
 
         Ok(expr)

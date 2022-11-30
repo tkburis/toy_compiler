@@ -18,6 +18,61 @@ impl<'a> ExprVisitor<Value, Error> for Interpreter<'a> {
         Ok(Value::from(value.to_owned()))
     }
 
+    fn visit_logical_expr(&mut self, left: &expr::Expr, operator: &token::Token, right: &expr::Expr) -> Result<Value, Error> {
+        let left_eval = self.evaluate(left)?;
+
+        // The implementation in the book returns a value with `appropriate truthiness`.
+        // Note how it `short-circuits`, in that `right` is only evaluated if the `truthiness`
+        // can not be deduced from `left_eval` right away.
+        match operator.type_ {
+            TokenType::Or => {
+                if self.is_truthy(&left_eval) {
+                    // The expression is definitely going to be truthy, so return `left_eval` right
+                    // away.
+                    Ok(left_eval)
+                } else {
+                    // The expression might be truthy, depending on the value of `right`. So return
+                    // that.
+                    Ok(self.evaluate(right)?)
+                }
+            },
+            TokenType::And => {
+                if self.is_truthy(&left_eval) {
+                    // The expression might be truthy, depending on the value of `right`. So return
+                    // that.
+                    Ok(self.evaluate(right)?)
+                } else {
+                    // The expression is definitely *not* going to be truthy, so return `left_eval`
+                    // right away.
+                    Ok(left_eval)
+                }
+            },
+
+            // Note no other operator type is reachable, since the parser builds logical expressions
+            // if and only if the operator is either `Or` or `And`.
+            _ => unreachable!(),
+        }
+
+        // This will return the actual `Value::Bool` of the expression.
+        // match operator.type_ {
+        //     TokenType::And => {
+        //         match self.is_truthy(&left_eval) {
+        //             true => Ok(Value::Bool(true)),
+        //             false => {
+        //                 let right_eval = self.evaluate(right)?;
+        //                 Ok(Value::Bool(self.is_truthy(&right_eval)))
+        //             },
+        //         }
+        //     },
+        //     TokenType::Or => {
+        //         let right_eval = self.evaluate(right)?;
+        //         Ok(Value::Bool(self.is_truthy(&left_eval) || self.is_truthy(&right_eval)))
+        //     },
+
+        //     _ => unreachable!(),
+        // }
+    }
+
     fn visit_grouping_expr(&mut self, expression: &expr::Expr) -> Result<Value, Error> {
         self.evaluate(expression)
     }
@@ -154,6 +209,16 @@ impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
         Ok(())
     }
 
+    fn visit_if_stmt(&mut self, condition: &expr::Expr, then_branch: &stmt::Stmt, else_branch: Option<&stmt::Stmt>) -> Result<(), Error> {
+        let condition_eval = self.evaluate(condition)?;
+        if self.is_truthy(&condition_eval) {
+            self.execute(then_branch)?;
+        } else if let Some(else_stmt) = else_branch {
+            self.execute(else_stmt)?;
+        }
+        Ok(())
+    }
+
     fn visit_print_stmt(&mut self, expression: &expr::Expr) -> Result<(), Error> {
         let value = self.evaluate(expression)?;
         println!("{}", value);
@@ -167,6 +232,21 @@ impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
         } else {
             self.environment.define(name.lexeme.to_owned(), None);
         }
+        Ok(())
+    }
+
+    fn visit_while_stmt(&mut self, condition: &expr::Expr, body: &stmt::Stmt) -> Result<(), Error> {
+        let mut condition_eval = self.evaluate(condition)?;
+        while self.is_truthy(&condition_eval) {
+            self.execute(body)?;
+            dbg!(&self.environment);
+            // TODO: BUG: child environment does not 'publish' changes to parent environment as
+            // parent environment is cloned. i.e. var a = 2; { a = a+1; } print a; gives 2 when it
+            // should give 3. This results in infinite loops if the condition is modified within
+            // the body of the loop, i.e. var i = 0; while (i < 5) { i = i+1; } results in an
+            // infinite loop because the parent environment does not change `i`.
+            condition_eval = self.evaluate(condition)?;
+        };
         Ok(())
     }
 }

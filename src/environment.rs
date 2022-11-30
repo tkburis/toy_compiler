@@ -3,7 +3,7 @@ use crate::error::Error;
 
 use std::collections::HashMap;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Environment {
     // Store the `parent` environment.
     // Note the decision here to store the owned `Environment`, as opposed to a reference. This is

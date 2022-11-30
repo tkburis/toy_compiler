@@ -18,6 +18,11 @@ pub enum Expr {
     Literal {
         value: token::Literal,
     },
+    Logical {
+        left: Box<Expr>,
+        operator: token::Token,
+        right: Box<Expr>,
+    },
     Unary {
         operator: token::Token,
         right: Box<Expr>,
@@ -42,6 +47,9 @@ pub trait ExprVisitor<T, E> {
             Expr::Literal { value } => {
                 self.visit_literal_expr(value)
             },
+            Expr::Logical { left, operator, right } => {
+                self.visit_logical_expr(left, operator, right)
+            },
             Expr::Unary { operator, right } => {
                 self.visit_unary_expr(operator, right)
             },
@@ -55,6 +63,7 @@ pub trait ExprVisitor<T, E> {
     fn visit_binary_expr(&mut self, left: &Expr, operator: &token::Token, right: &Expr) -> Result<T, E>;
     fn visit_grouping_expr(&mut self, expression: &Expr) -> Result<T, E>;
     fn visit_literal_expr(&mut self, value: &token::Literal) -> Result<T, E>;
+    fn visit_logical_expr(&mut self, left: &Expr, operator: &token::Token, right: &Expr) -> Result<T, E>;
     fn visit_unary_expr(&mut self, operator: &token::Token, right: &Expr) -> Result<T, E>;
     fn visit_variable_expr(&mut self, name: &token::Token) -> Result<T, E>;
 }
