@@ -239,12 +239,6 @@ impl<'a> StmtVisitor<(), Error> for Interpreter<'a> {
         let mut condition_eval = self.evaluate(condition)?;
         while self.is_truthy(&condition_eval) {
             self.execute(body)?;
-            dbg!(&self.environment);
-            // TODO: BUG: child environment does not 'publish' changes to parent environment as
-            // parent environment is cloned. i.e. var a = 2; { a = a+1; } print a; gives 2 when it
-            // should give 3. This results in infinite loops if the condition is modified within
-            // the body of the loop, i.e. var i = 0; while (i < 5) { i = i+1; } results in an
-            // infinite loop because the parent environment does not change `i`.
             condition_eval = self.evaluate(condition)?;
         };
         Ok(())
@@ -285,6 +279,7 @@ impl<'a> Interpreter<'a> {
         }
         // Swap back.
         mem::swap(self.environment, new_env);
+        self.environment.update(new_env);
         Ok(())
     }
 

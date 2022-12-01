@@ -13,6 +13,12 @@ pub struct Environment {
 
     // Uninitialized identifiers will have value `None`.
     values: HashMap<String, Option<Value>>,
+
+    // Store the modified values of the `parent` environment.
+    // This is because `enclosing` is a clone of the `parent` environment. Hence, changes made by
+    // `assign` in this environment will not `be saved` once the environments have been swapped
+    // back in the interpreter. See `update()`.
+    parent_modified: HashMap<String, Value>,
 }
 
 impl Environment {
@@ -20,6 +26,7 @@ impl Environment {
         Self {
             enclosing: enclosing.map(Box::new),
             values: HashMap::new(),
+            parent_modified: HashMap::new(),
         }
     }
 
@@ -56,9 +63,37 @@ impl Environment {
         } else {
             // See above.
             if let Some(enclosing) = &mut self.enclosing {
-                Ok(enclosing.assign(name, value)?)
+                enclosing.assign(name, value)?;
+                // Keep track of changes made to the `parent` environment, so they can be `saved`.
+                self.parent_modified.insert(name.lexeme.clone(), value.to_owned());
+                Ok(())
             } else {
                 Err(self.undefined_variable_error(name))
+            }
+        }
+    }
+
+    // Given a `child` environment, `save` the changes made from the `child` environment.
+    pub fn update(&mut self, update_from: &mut Environment) {
+        for (key, value) in &update_from.parent_modified {
+            self.assign_string(key, value);
+        }
+    }
+
+    // Similar to `assign()`, but takes a `String` for a `name` as opposed to a `Token`.
+    // This is because `parent_modified` cannot store `Token`s as they are not hashable.
+    fn assign_string(&mut self, name: &String, value: &Value) {
+        if self.values.contains_key(name) {
+            self.values.insert(name.to_owned(), Some(value.to_owned()));
+        } else {
+            if let Some(enclosing) = &mut self.enclosing {
+                enclosing.assign_string(name, value);
+                self.parent_modified.insert(name.clone(), value.to_owned());
+            } else {
+                // Note this is should not be possible, since all variables in `parent_modified` are
+                // there because the variable has been found in the `parent` environment.
+                // However, there may be some edge cases if it is possible to `drop` a variable.
+                panic!("Variable {name} not found when calling `assign_string`");
             }
         }
     }
