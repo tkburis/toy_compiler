@@ -64,18 +64,22 @@ impl Parser {
         Ok(Stmt::Var { name, initializer })
     }
 
-    // statement -> if_statement
+    // statement -> for_statement
+    //              | if_statement
     //              | print_statement
     //              | while_statement
     //              | block
     //              | expression_statement
     fn statement(&mut self) -> Result<Stmt, Error> {
-        if self.match_next(&[TokenType::If]) {
+        if self.match_next(&[TokenType::For]) {
+            self.for_statement()
+
+        } else if self.match_next(&[TokenType::If]) {
             self.if_statement()
 
         } else if self.match_next(&[TokenType::Print]) {
             self.print_statement()
-        
+
         } else if self.match_next(&[TokenType::While]) {
             self.while_statement()
 
@@ -85,6 +89,65 @@ impl Parser {
         } else {
             self.expression_statement()
         }
+    }
+
+    // `Desugar` the `for` statement into a `while` loop.
+    // for_statement -> "for" "(" ( var_declaration | expression_statement | ";" ) expression? ";"
+    // expression? ";" ")" statement
+    fn for_statement(&mut self) -> Result<Stmt, Error> {
+        self.match_err(&TokenType::LeftParen, "Expect `(` after `for`.")?;
+
+        let initializer: Option<Stmt>;
+        if self.match_next(&[TokenType::Semicolon]) {
+            initializer = None;
+        } else if self.match_next(&[TokenType::Var]) {
+            initializer = Some(self.var_declaration()?);
+        } else {
+            initializer = Some(self.expression_statement()?);
+        }
+        // Note the `;` has already been consumed by either `var_declaration` or
+        // `expression_statement` already.
+
+        // TODO: better way to do this?
+        let mut condition = Expr::Literal { value: Literal::Bool(true) };
+        if !self.check(&TokenType::Semicolon) {
+            condition = self.expression()?;
+        }
+        self.match_err(&TokenType::Semicolon, "Expected `;` after `for` condition.")?;
+
+        let mut increment: Option<Expr> = None;
+        if !self.check(&TokenType::RightParen) {
+            increment = Some(self.expression()?);
+        }
+        self.match_err(&TokenType::RightParen, "Expected `)` after `for` clause.")?;
+
+        // Now we convert it to:
+        //  {
+        //      `initializer`
+        //      while (`condition`) {
+        //          `body`
+        //          `increment`
+        //      }
+        //  }
+
+        let mut body = self.statement()?;
+        if let Some(inc) = increment {
+            // As the increment will be executed after every iteration, we add it to the body of
+            // the loop.
+            body = Stmt::Block {
+                statements: vec![body, Stmt::Expression { expression: inc }]
+            };
+        }
+
+        body = Stmt::While { condition, body: Box::new(body) };
+
+        if let Some(init) = initializer {
+            body = Stmt::Block {
+                statements: vec![init, body]
+            };
+        }
+
+        Ok(body)
     }
 
     fn if_statement(&mut self) -> Result<Stmt, Error> {
